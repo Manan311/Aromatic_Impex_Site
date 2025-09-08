@@ -1,0 +1,33 @@
+HR Time Tracking System - Diagnostic Report
+Generated: Wed 20 Aug 2025 23:25:49 EDT
+==========================================
+
+ENVIRONMENT CHECK:
+- Node.js version: v20.18.0
+- npm version: 10.8.2
+- .env.local exists: Yes
+- package.json exists: Yes
+
+REQUIRED FILES CHECK:
+- lib/database.ts: ✅ Exists
+- lib/auth.ts: ✅ Exists
+- app/api/admin/employees/route.ts: ✅ Exists
+- components/AdminDashboard.tsx: ✅ Exists
+
+DEPENDENCIES CHECK:
+├── bcrypt@6.0.0
+├── mysql2@3.14.3
+└── uuid@9.0.1
+
+COMMON FIXES TO TRY:
+1. Restart development server: npm run dev
+2. Clear browser cache and cookies
+3. Log in with: admin / admin123
+4. Check browser console for detailed errors
+5. Verify database connection in .env.local
+
+NEXT STEPS:
+1. Review this report
+2. Run: node test-api.js (if created)
+3. Check browser console for client-side errors
+4. Check terminal for server-side errors

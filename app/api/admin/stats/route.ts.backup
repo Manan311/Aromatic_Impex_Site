@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifySession } from '@/lib/auth';
+import { executeQuery } from '@/lib/database';
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await verifySession(request);
+    
+    if (!session || !['admin', 'manager'].includes(session.role)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+
+    const [employeeCount] = await executeQuery(`
+      SELECT COUNT(*) as count FROM employees 
+      WHERE role IN ('employee', 'manager') AND is_active = TRUE
+    `);
+
+    const [todayStats] = await executeQuery(`
+      SELECT 
+        COALESCE(SUM(total_hours), 0) as total_hours,
+        COALESCE(SUM(total_pay), 0) as total_cost,
+        COUNT(*) as total_entries
+      FROM time_entries 
+      WHERE DATE(clock_in_time) = ?
+    `, [today]);
+
+    const [weekStats] = await executeQuery(`
+      SELECT 
+        COALESCE(SUM(total_hours), 0) as total_hours,
+        COALESCE(SUM(total_pay), 0) as total_cost,
+        COUNT(*) as total_entries
+      FROM time_entries 
+      WHERE DATE(clock_in_time) >= ?
+    `, [weekStartStr]);
+
+    const [clockedInCount] = await executeQuery(`
+      SELECT COUNT(DISTINCT employee_id) as count
+      FROM time_entries 
+      WHERE DATE(clock_in_time) = ? AND clock_out_time IS NULL
+    `, [today]);
+
+    return NextResponse.json({
+      totalEmployees: employeeCount.count || 0,
+      totalHoursToday: parseFloat(todayStats.total_hours) || 0,
+      totalCostToday: parseFloat(todayStats.total_cost) || 0,
+      totalHoursWeek: parseFloat(weekStats.total_hours) || 0,
+      totalCostWeek: parseFloat(weekStats.total_cost) || 0,
+      entriesTotal: parseInt(todayStats.total_entries) || 0,
+      currentlyClockedIn: parseInt(clockedInCount.count) || 0
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
