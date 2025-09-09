@@ -1,34 +1,20 @@
 'use client';
-// import { Metadata } from 'next';
-
-// export const metadata: Metadata = {
-//   title: 'Request Quote - Aromatic Impex Inc.',
-//   description: 'Get a personalized quote for premium quality spices for wholesale and bulk distribution.',
-// };
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
-  GlobeAltIcon,
-  ScaleIcon,
   CubeIcon,
   CheckIcon,
-  MapPinIcon,
-  EnvelopeIcon,
-  ChatBubbleLeftRightIcon,
-  SparklesIcon,
-  ArrowRightIcon,
   UserIcon,
   PlusIcon,
   PaperAirplaneIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
-
-interface SpiceProduct {
-  name: string;
-  selected: boolean;
-  quantity: string;
-}
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { createInitialSpices, type SpiceProduct } from '@/data/products';
 
 interface FormData {
   firstName: string;
@@ -39,34 +25,24 @@ interface FormData {
   country: string;
   spices: SpiceProduct[];
   otherProducts: string;
-  qualityGrade: string;
-  deliveryTimeline: string;
   packaging: string[];
   additionalComments: string;
 }
 
-const QuoteRequestPage: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<'landing' | 'form'>('landing');
-  const [showSuccess, setShowSuccess] = useState(false);
+interface ValidationErrors {
+  email?: string;
+  phone?: string;
+  country?: string;
+  quantities?: string[];
+}
 
-  const initialSpices: SpiceProduct[] = [
-    { name: 'Cumin', selected: false, quantity: '' },
-    { name: 'Green Cardamom', selected: false, quantity: '' },
-    { name: 'Fennel', selected: false, quantity: '' },
-    { name: 'Sesame', selected: false, quantity: '' },
-    { name: 'Ajwain', selected: false, quantity: '' },
-    { name: 'Fenugreek', selected: false, quantity: '' },
-    { name: 'Coriander', selected: false, quantity: '' },
-    { name: 'Chilli', selected: false, quantity: '' },
-    { name: 'Turmeric', selected: false, quantity: '' },
-    { name: 'Black Pepper', selected: false, quantity: '' },
-    { name: 'Cloves', selected: false, quantity: '' },
-    { name: 'Phool Makhana', selected: false, quantity: '' },
-    { name: 'Cinnamon', selected: false, quantity: '' },
-    { name: 'Star Anise', selected: false, quantity: '' },
-    { name: 'Bay Leaf', selected: false, quantity: '' },
-    { name: 'Kalonji (Black Seed)', selected: false, quantity: '' }
-  ];
+const QuoteRequestPage: React.FC = () => {
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  const [realtimeErrors, setRealtimeErrors] = useState<ValidationErrors>({});
+
+  // Use centralized product data
+  const initialSpices = createInitialSpices();
 
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -77,8 +53,6 @@ const QuoteRequestPage: React.FC = () => {
     country: '',
     spices: initialSpices,
     otherProducts: '',
-    qualityGrade: '',
-    deliveryTimeline: '',
     packaging: [],
     additionalComments: ''
   });
@@ -89,8 +63,97 @@ const QuoteRequestPage: React.FC = () => {
     'Private Labeling'
   ];
 
+  // Valid countries list (simplified)
+  const validCountries = [
+    'Canada', 
+    'United States'
+  ];
+
+  // Email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Phone validation regex (supports various international formats)
+  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+
+  // Function to extract numeric value from quantity string
+  const extractQuantityValue = (quantityStr: string): number => {
+    if (!quantityStr) return 0;
+    
+    const cleanStr = quantityStr.toLowerCase().replace(/[^\d.,]/g, '');
+    const numericValue = parseFloat(cleanStr.replace(',', ''));
+    
+    if (isNaN(numericValue)) return 0;
+    
+    const lowerQuantity = quantityStr.toLowerCase();
+    
+    if (lowerQuantity.includes('t') || lowerQuantity.includes('ton')) {
+      return numericValue * 1000;
+    } else if (lowerQuantity.includes('g') && !lowerQuantity.includes('kg')) {
+      return numericValue / 1000;
+    } else if (lowerQuantity.includes('lb') || lowerQuantity.includes('pound')) {
+      return numericValue * 0.453592;
+    }
+    
+    return numericValue;
+  };
+
+  // Validate email format
+  const validateEmail = (email: string): string | null => {
+    if (!email) return null;
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address (e.g., user@example.com)';
+    }
+    return null;
+  };
+
+  // Validate phone format
+  const validatePhone = (phone: string): string | null => {
+    if (!phone) return null;
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    if (!phoneRegex.test(cleanPhone)) {
+      return 'Please enter a valid phone number (e.g., +1234567890 or 1234567890)';
+    }
+    return null;
+  };
+
+  // Validate country
+  const validateCountry = (country: string): string | null => {
+    if (!country) return null;
+    const isValid = validCountries.some(validCountry => 
+      validCountry.toLowerCase() === country.toLowerCase()
+    );
+    if (!isValid) {
+      return 'Please enter a valid country name';
+    }
+    return null;
+  };
+
+  // Validate minimum quantities
+  const validateQuantities = (): string[] => {
+    const errors: string[] = [];
+    const selectedSpices = formData.spices.filter(spice => spice.selected);
+    
+    if (selectedSpices.length === 0) {
+      errors.push('Please select at least one product.');
+    }
+    
+    selectedSpices.forEach(spice => {
+      if (!spice.quantity.trim()) {
+        errors.push(`Please specify quantity for ${spice.name}.`);
+      } else {
+        const quantityInKg = extractQuantityValue(spice.quantity);
+        if (quantityInKg < 1000) {
+          errors.push(`${spice.name}: Minimum order quantity is 1000kg (Current: ${quantityInKg}kg).`);
+        }
+      }
+    });
+    
+    return errors;
+  };
+
   const handleSpiceChange = (index: number, field: 'selected' | 'quantity', value: boolean | string) => {
     const updatedSpices = [...formData.spices];
+    
     if (field === 'selected') {
       updatedSpices[index].selected = value as boolean;
       if (!value) {
@@ -98,8 +161,21 @@ const QuoteRequestPage: React.FC = () => {
       }
     } else {
       updatedSpices[index].quantity = value as string;
+      // Auto-check if quantity > 0
+      const quantityValue = extractQuantityValue(value as string);
+      if (quantityValue > 0) {
+        updatedSpices[index].selected = true;
+      } else {
+        updatedSpices[index].selected = false;
+      }
     }
+    
     setFormData({ ...formData, spices: updatedSpices });
+    
+    // Clear validation errors when user makes changes
+    if (validationErrors.quantities) {
+      setValidationErrors({ ...validationErrors, quantities: undefined });
+    }
   };
 
   const handlePackagingChange = (option: string, checked: boolean) => {
@@ -112,27 +188,54 @@ const QuoteRequestPage: React.FC = () => {
     setFormData({ ...formData, packaging: updatedPackaging });
   };
 
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData({ ...formData, [field]: value });
+    
+    // Clear specific validation errors when user types
+    if (field === 'email' && validationErrors.email) {
+      setValidationErrors({ ...validationErrors, email: undefined });
+    }
+    if (field === 'phone' && validationErrors.phone) {
+      setValidationErrors({ ...validationErrors, phone: undefined });
+    }
+    if (field === 'country' && validationErrors.country) {
+      setValidationErrors({ ...validationErrors, country: undefined });
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const errors: ValidationErrors = {};
+    
+    // Validate email
+    const emailError = validateEmail(formData.email);
+    if (emailError) errors.email = emailError;
+    
+    // Validate phone
+    const phoneError = validatePhone(formData.phone);
+    if (phoneError) errors.phone = phoneError;
+    
+    // Validate country
+    const countryError = validateCountry(formData.country);
+    if (countryError) errors.country = countryError;
+    
+    // Validate quantities
+    const quantityErrors = validateQuantities();
+    if (quantityErrors.length > 0) errors.quantities = quantityErrors;
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      window.scrollTo(0, 0);
+      return;
+    }
+    
     setShowSuccess(true);
-    // In a real application, you would send the form data to your server here
     console.log('Form submitted:', formData);
-  };
-
-  const showQuoteForm = () => {
-    setCurrentPage('form');
-    window.scrollTo(0, 0);
-  };
-
-  const showLandingPage = () => {
-    setCurrentPage('landing');
-    window.scrollTo(0, 0);
   };
 
   const closeSuccessMessage = () => {
     setShowSuccess(false);
-    showLandingPage();
-    // Reset form
     setFormData({
       firstName: '',
       lastName: '',
@@ -142,307 +245,267 @@ const QuoteRequestPage: React.FC = () => {
       country: '',
       spices: initialSpices,
       otherProducts: '',
-      qualityGrade: '',
-      deliveryTimeline: '',
       packaging: [],
       additionalComments: ''
     });
+    setValidationErrors({});
+    setRealtimeErrors({});
   };
 
   return (
     <div className="bg-gradient-to-br from-slate-50 via-white to-slate-100 min-h-screen">
-      {/* Header */}
-      <header className="backdrop-blur-md bg-white/80 border-b border-slate-200/60 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Image
-                src="https://www.aromaticimpex.com/Logo.png"
-                alt="Aromatic Impex Logo"
-                width={64}
-                height={64}
-              />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                Aromatic Impex Inc.
-              </h1>
-              <p className="text-sm text-slate-500 font-medium">Premium Spices • Trusted Across North America</p>
+      <Header />
+
+      <main className="container mx-auto px-6 py-12">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <Link href="/" className="inline-flex items-center space-x-2 text-green-600 hover:text-green-700 mb-6 transition-colors">
+              <ArrowLeftIcon className="w-4 h-4" />
+              <span className="text-black">Back to Home</span>
+            </Link>
+            
+            <h2 className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-black to-slate-800 bg-clip-text text-transparent mb-6">
+              Wholesale Quote Request
+            </h2>
+            <p className="text-xl text-black max-w-3xl mx-auto mb-6">
+              Fill out the form below with your bulk requirements. All products have a minimum order quantity of <span className="font-bold text-green-600">1000kg</span>.
+            </p>
+            <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-2">
+              <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-700">Minimum Order: 1000kg per product</span>
             </div>
           </div>
-          <nav className="hidden md:flex items-center space-x-1">
-            <a href="/" className="px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all duration-200 font-medium">Home</a>
-            <a href="/#products" className="px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all duration-200 font-medium">Products</a>
-            <a href="/#about" className="px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all duration-200 font-medium">About</a>
-            <a href="/#contact" className="px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all duration-200 font-medium">Contact</a>
-          </nav>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-12">
-        {/* Landing Page */}
-        {currentPage === 'landing' && (
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Background Elements */}
-            <div className="absolute top-20 left-10 w-72 h-72 bg-gradient-to-br from-green-400/20 to-emerald-300/20 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-gradient-to-br from-yellow-300/20 to-amber-400/20 rounded-full blur-3xl animate-pulse"></div>
-            
-            <div className="relative z-10">
-              {/* Badge */}
-              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/60 rounded-full px-6 py-3 mb-8">
-                <EnvelopeIcon className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-semibold text-green-700">Request Quote</span>
+          {/* Validation Errors */}
+          {(validationErrors.email || validationErrors.phone || validationErrors.country || validationErrors.quantities) && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
+              <div className="flex items-center mb-4">
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600 mr-3" />
+                <h3 className="text-lg font-semibold text-red-800">Please fix the following issues:</h3>
               </div>
+              <ul className="list-disc list-inside space-y-2">
+                {validationErrors.email && <li className="text-red-700">{validationErrors.email}</li>}
+                {validationErrors.phone && <li className="text-red-700">{validationErrors.phone}</li>}
+                {validationErrors.country && <li className="text-red-700">{validationErrors.country}</li>}
+                {validationErrors.quantities?.map((error, index) => (
+                  <li key={index} className="text-red-700">{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-              {/* Title */}
-              <h1 className="text-6xl lg:text-7xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-6 tracking-tight">
-                Get Your Quote
-              </h1>
+          <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-10 shadow-2xl">
+            {/* Contact Information */}
+            <div className="mb-12">
+              <h3 className="text-2xl font-bold text-black mb-6 flex items-center">
+                <UserIcon className="w-6 h-6 text-green-600 mr-3" />
+                Contact Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">First Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange('firstName', e.target.value)}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    placeholder="Enter your first name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Last Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    placeholder="Enter your last name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Company Name *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={formData.companyName}
+                    onChange={(e) => handleInputChange('companyName', e.target.value)}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    placeholder="Enter your company name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Email Address *</label>
+                  <input 
+                    type="email" 
+                    required 
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
+                      validationErrors.email ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    }`}
+                    placeholder="Enter your email address (e.g., user@example.com)"
+                  />
+                  {validationErrors.email && (
+                    <p className="text-red-600 text-sm mt-1">{validationErrors.email}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
+                      validationErrors.phone ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    }`}
+                    placeholder="Enter your phone number (e.g., +1234567890)"
+                  />
+                  {validationErrors.phone && (
+                    <p className="text-red-600 text-sm mt-1">{validationErrors.phone}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Country *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={formData.country}
+                    onChange={(e) => handleInputChange('country', e.target.value)}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
+                      validationErrors.country ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    }`}
+                    placeholder="Enter your country (e.g., Canada, United States)"
+                    list="countries"
+                  />
+                  <datalist id="countries">
+                    {validCountries.map(country => (
+                      <option key={country} value={country} />
+                    ))}
+                  </datalist>
+                  {validationErrors.country && (
+                    <p className="text-red-600 text-sm mt-1">{validationErrors.country}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Product Selection */}
+            <div className="mb-12">
+              <h3 className="text-2xl font-bold text-black mb-6 flex items-center">
+                <CubeIcon className="w-6 h-6 text-green-600 mr-3" />
+                Product Selection
+              </h3>
+              <p className="text-black mb-6">
+                Select products and specify quantities (minimum 1000kg per product). You can use units like: 1000kg, 1.5t, 2000 kg, etc.
+                <br />
+                <span className="text-sm text-green-600 font-medium">Tip: Enter a quantity and the product will be automatically selected!</span>
+              </p>
               
-              <p className="text-2xl text-slate-600 mb-6 font-medium leading-relaxed">
-                Premium Quality Spices for 
-                <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent font-bold"> Wholesale</span>
-                &
-                <span className="bg-gradient-to-r from-amber-500 to-yellow-500 bg-clip-text text-transparent font-bold"> Bulk Distribution</span>
-              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {formData.spices.map((spice, index) => (
+                  <div key={spice.name} className={`border rounded-2xl p-4 transition-all duration-200 hover:scale-105 hover:shadow-md ${
+                    spice.selected 
+                      ? 'bg-green-50/50 border-green-200 hover:bg-green-50' 
+                      : 'bg-slate-50/50 border-slate-200 hover:bg-green-50/50 hover:border-green-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={spice.selected}
+                          onChange={(e) => handleSpiceChange(index, 'selected', e.target.checked)}
+                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200"
+                        />
+                        <span className="ml-2 font-semibold text-black text-sm">{spice.name}</span>
+                      </label>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Min: 1000kg (e.g., 1500kg, 2t)"
+                      value={spice.quantity}
+                      onChange={(e) => handleSpiceChange(index, 'quantity', e.target.value)}
+                      className="w-full px-3 py-2 text-sm text-black bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-green-300 hover:bg-green-50/30"
+                    />
+                    {spice.selected && spice.quantity && (
+                      <div className="mt-2 text-xs">
+                        <span className={`font-medium ${
+                          extractQuantityValue(spice.quantity) >= 1000 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {extractQuantityValue(spice.quantity)}kg 
+                          {extractQuantityValue(spice.quantity) < 1000 ? ' (Below minimum)' : ' ✓'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-              <p className="text-xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed">
-                Tell us about your spice requirements and get a personalized quote for premium-quality spices sourced from the finest growers worldwide.
-              </p>
+            {/* Additional Requirements */}
+            <div className="mb-12">
+              <h3 className="text-2xl font-bold text-black mb-6 flex items-center">
+                <PlusIcon className="w-6 h-6 text-green-600 mr-3" />
+                Additional Requirements
+              </h3>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Other Products (minimum 1000kg each)</label>
+                  <textarea 
+                    rows={4} 
+                    value={formData.otherProducts}
+                    onChange={(e) => handleInputChange('otherProducts', e.target.value)}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white" 
+                    placeholder="List any other spices or products with quantities (e.g., Custom Spice Blend - 2000kg, Organic Turmeric - 1500kg)..."
+                  />
+                </div>
 
-              {/* CTA Button */}
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Packaging Requirements</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {packagingOptions.map((option) => (
+                      <label key={option} className="flex items-center cursor-pointer bg-slate-50/50 border border-slate-200 rounded-2xl p-4 hover:bg-green-50/50 hover:border-green-200 transition-all duration-200 hover:scale-105">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.packaging.includes(option)}
+                          onChange={(e) => handlePackagingChange(option, e.target.checked)}
+                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200"
+                        />
+                        <span className="ml-2 text-black">{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-3">Additional Comments or Special Requirements</label>
+                  <textarea 
+                    rows={6} 
+                    value={formData.additionalComments}
+                    onChange={(e) => handleInputChange('additionalComments', e.target.value)}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white" 
+                    placeholder="Please provide any additional details about your requirements, certifications needed, delivery address, quality specifications, or any special requests..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <div className="text-center">
               <button 
-                onClick={showQuoteForm}
+                type="submit" 
                 className="group bg-gradient-to-r from-green-600 to-emerald-600 text-white px-12 py-5 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300 text-lg shadow-xl hover:shadow-2xl hover:scale-105 flex items-center space-x-2 mx-auto"
               >
-                <span>Start Quote Request</span>
-                <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <span>Submit Quote Request</span>
+                <PaperAirplaneIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-
-              {/* Features */}
-              <div className="grid md:grid-cols-3 gap-8 mt-16">
-                <div className="group text-center hover:scale-105 transition-transform duration-300">
-                  <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl group-hover:shadow-2xl transition-shadow duration-300">
-                    <GlobeAltIcon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="font-bold mb-3 text-lg text-slate-800">Global Sourcing</h3>
-                  <p className="text-slate-600">Direct partnerships with authentic spice origins worldwide</p>
-                </div>
-                
-                <div className="group text-center hover:scale-105 transition-transform duration-300">
-                  <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl group-hover:shadow-2xl transition-shadow duration-300">
-                    <CubeIcon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="font-bold mb-3 text-lg text-slate-800">Bulk Quantities</h3>
-                  <p className="text-slate-600">Competitive pricing for large volume commercial orders</p>
-                </div>
-                
-                <div className="group text-center hover:scale-105 transition-transform duration-300">
-                  <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl group-hover:shadow-2xl transition-shadow duration-300">
-                    <CheckIcon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="font-bold mb-3 text-lg text-slate-800">Quality Assured</h3>
-                  <p className="text-slate-600">Stringent quality checks and eco-friendly practices</p>
-                </div>
-              </div>
+              <p className="text-black text-sm mt-4">We'll get back to you within 24 hours with a detailed wholesale quote.</p>
             </div>
-          </div>
-        )}
-
-        {/* Quote Form Page */}
-        {currentPage === 'form' && (
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-12">
-              <button 
-                onClick={showLandingPage}
-                className="inline-flex items-center space-x-2 text-green-600 hover:text-green-700 mb-6 transition-colors"
-              >
-                <ArrowLeftIcon className="w-4 h-4" />
-                <span>Back to Quote Request</span>
-              </button>
-              
-              <h2 className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-6">
-                Quote Request Form
-              </h2>
-              <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-                Please fill out the form below with your requirements and we'll get back to you with a detailed quote.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-10 shadow-2xl">
-              {/* Contact Information */}
-              <div className="mb-12">
-                <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-                  <UserIcon className="w-6 h-6 text-green-600 mr-3" />
-                  Contact Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">First Name *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your first name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Last Name *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your last name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Company Name *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({...formData, companyName: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your company name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Email Address *</label>
-                    <input 
-                      type="email" 
-                      required 
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your email address"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Phone Number</label>
-                    <input 
-                      type="tel" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your phone number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Country *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={formData.country}
-                      onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
-                      placeholder="Enter your country"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Product Selection */}
-              <div className="mb-12">
-                <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-                  <CubeIcon className="w-6 h-6 text-green-600 mr-3" />
-                  Product Selection
-                </h3>
-                <p className="text-slate-600 mb-6">Select the spices you're interested in and specify quantities:</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {formData.spices.map((spice, index) => (
-                    <div key={spice.name} className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 hover:bg-green-50/50 hover:border-green-200 transition-all duration-200 hover:scale-105">
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={spice.selected}
-                            onChange={(e) => handleSpiceChange(index, 'selected', e.target.checked)}
-                            className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                          />
-                          <span className="ml-2 font-semibold text-slate-700">{spice.name}</span>
-                        </label>
-                      </div>
-                      <input 
-                        type="text" 
-                        placeholder={`Quantity (e.g., ${Math.floor(Math.random() * 150) + 20} kg)`}
-                        value={spice.quantity}
-                        onChange={(e) => handleSpiceChange(index, 'quantity', e.target.value)}
-                        disabled={!spice.selected}
-                        className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 disabled:bg-slate-100 disabled:text-slate-400"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Other Requirements */}
-              <div className="mb-12">
-                <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-                  <PlusIcon className="w-6 h-6 text-green-600 mr-3" />
-                  Other Requirements
-                </h3>
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Other Spices or Products (Please specify)</label>
-                    <textarea 
-                      rows={4} 
-                      value={formData.otherProducts}
-                      onChange={(e) => setFormData({...formData, otherProducts: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none" 
-                      placeholder="List any other spices, blends, or products you need with quantities..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Packaging Requirements</label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {packagingOptions.map((option) => (
-                        <label key={option} className="flex items-center cursor-pointer bg-slate-50/50 border border-slate-200 rounded-2xl p-4 hover:bg-green-50/50 hover:border-green-200 transition-all duration-200">
-                          <input 
-                            type="checkbox" 
-                            checked={formData.packaging.includes(option)}
-                            onChange={(e) => handlePackagingChange(option, e.target.checked)}
-                            className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                          />
-                          <span className="ml-2 text-slate-700">{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-3">Additional Comments or Special Requirements</label>
-                    <textarea 
-                      rows={6} 
-                      value={formData.additionalComments}
-                      onChange={(e) => setFormData({...formData, additionalComments: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none" 
-                      placeholder="Please provide any additional details about your requirements, certifications needed, delivery address, or any special requests..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="text-center">
-                <button 
-                  type="submit" 
-                  className="group bg-gradient-to-r from-green-600 to-emerald-600 text-white px-12 py-5 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300 text-lg shadow-xl hover:shadow-2xl hover:scale-105 flex items-center space-x-2 mx-auto"
-                >
-                  <span>Submit Quote Request</span>
-                  <PaperAirplaneIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <p className="text-slate-500 text-sm mt-4">We'll get back to you within 24 hours with a detailed quote.</p>
-              </div>
-            </form>
-          </div>
-        )}
+          </form>
+        </div>
       </main>
 
       {/* Success Message Modal */}
@@ -452,8 +515,8 @@ const QuoteRequestPage: React.FC = () => {
             <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckIcon className="w-10 h-10 text-white" />
             </div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-4">Quote Request Submitted!</h3>
-            <p className="text-slate-600 mb-6">Thank you for your interest in our premium spices. We'll review your requirements and get back to you within 24 hours with a detailed quote.</p>
+            <h3 className="text-2xl font-bold text-black mb-4">Wholesale Quote Request Submitted!</h3>
+            <p className="text-black mb-6">Thank you for your bulk order inquiry. We'll review your requirements and get back to you within 24 hours with a detailed wholesale quote.</p>
             <button 
               onClick={closeSuccessMessage}
               className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300"
@@ -464,41 +527,7 @@ const QuoteRequestPage: React.FC = () => {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-16 relative overflow-hidden mt-20">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-green-500/10 to-transparent rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full blur-3xl"></div>
-
-        <div className="container mx-auto px-6 text-center relative z-10">
-          <div className="flex justify-center items-center mb-8">
-            <div className="relative mr-4">
-              <Image
-                src="https://www.aromaticimpex.com/Logo.png"
-                alt="Aromatic Impex Logo"
-                width={48}
-                height={48}
-              />
-            </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              Aromatic Impex Inc.
-            </span>
-          </div>
-
-          <p className="text-slate-300 mb-6 text-lg max-w-2xl mx-auto leading-relaxed">
-            Premium Quality Spices from Around the World • Built on Trust. Backed by Experience.
-          </p>
-
-          <div className="flex items-center justify-center space-x-4 mb-8">
-            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent to-green-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-            <div className="w-16 h-0.5 bg-gradient-to-l from-transparent to-green-400 rounded-full"></div>
-          </div>
-
-          <p className="text-sm text-slate-400">
-            © 2025 Aromatic Impex Inc. All rights reserved. • Where Flavor Meets Authenticity
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };
