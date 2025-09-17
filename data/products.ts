@@ -10,6 +10,7 @@ export interface SpiceProduct {
   name: string;
   selected: boolean;
   quantity: string;
+  category?: string;
 }
 
 export const productCategories: Record<string, Product[]> = {
@@ -122,12 +123,37 @@ export const getAllProductNames = (): string[] => {
   return getAllProducts().map(product => product.name);
 };
 
-// Convert products to SpiceProduct format for quote forms
+// Helper function to get product category
+export const getProductCategory = (productName: string): string => {
+  for (const [category, products] of Object.entries(productCategories)) {
+    if (products.some(product => product.name === productName)) {
+      return category;
+    }
+  }
+  return 'Other';
+};
+
+// Helper function to get product minimum requirements
+export const getProductMinimumRequirements = (productName: string): { min: number; unit: string } => {
+  if (productName === 'Jivraj 9 Tea' || productName === 'Cow Ghee') {
+    return { min: 40, unit: 'cases' };
+  }
+  
+  const category = getProductCategory(productName);
+  if (category === 'Beverages') {
+    return { min: 156, unit: 'cases' };
+  }
+  
+  return { min: 1000, unit: 'kg' };
+};
+
+// Convert products to SpiceProduct format for quote forms with category information
 export const createInitialSpices = (): SpiceProduct[] => {
   return getAllProducts().map(product => ({
     name: product.name,
     selected: false,
-    quantity: ''
+    quantity: '',
+    category: getProductCategory(product.name)
   }));
 };
 

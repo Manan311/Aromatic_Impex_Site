@@ -16,7 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { createInitialSpices, type SpiceProduct } from '@/data/products';
+import { createInitialSpices, getProductCategory, getProductMinimumRequirements, type SpiceProduct } from '@/data/products';
 import { sendQuoteRequestEmail, getCurrentDateTime, initEmailJS, type QuoteRequestEmailData } from '@/lib/emailjs';
 
 interface FormData {
@@ -54,7 +54,7 @@ const QuoteRequestPage: React.FC = () => {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
-  // Use centralized product data
+  // Use centralized product data with category information
   const initialSpices = createInitialSpices();
 
   const [formData, setFormData] = useState<FormData>({
@@ -64,7 +64,7 @@ const QuoteRequestPage: React.FC = () => {
     email: '',
     phone: '',
     country: '',
-    spices: initialSpices,
+    spices: initialSpices, // Already includes category information from createInitialSpices()
     otherProducts: '',
     packaging: [],
     additionalComments: ''
@@ -200,8 +200,8 @@ const QuoteRequestPage: React.FC = () => {
     }
   };
 
-  // Function to extract numeric value from quantity string
-  const extractQuantityValue = (quantityStr: string): number => {
+  // Function to extract numeric value from quantity string (handles both kg and cases)
+  const extractQuantityValue = (quantityStr: string, productName: string): number => {
     if (!quantityStr) return 0;
     
     const cleanStr = quantityStr.toLowerCase().replace(/[^\d.,]/g, '');
@@ -209,20 +209,28 @@ const QuoteRequestPage: React.FC = () => {
     
     if (isNaN(numericValue)) return 0;
     
-    const lowerQuantity = quantityStr.toLowerCase();
+    const { unit } = getProductMinimumRequirements(productName);
     
-    if (lowerQuantity.includes('t') || lowerQuantity.includes('ton')) {
-      return numericValue * 1000;
-    } else if (lowerQuantity.includes('g') && !lowerQuantity.includes('kg')) {
-      return numericValue / 1000;
-    } else if (lowerQuantity.includes('lb') || lowerQuantity.includes('pound')) {
-      return numericValue * 0.453592;
+    if (unit === 'cases') {
+      // For beverages, return the number as cases
+      return numericValue;
+    } else {
+      // For regular products, handle kg conversion
+      const lowerQuantity = quantityStr.toLowerCase();
+      
+      if (lowerQuantity.includes('t') || lowerQuantity.includes('ton')) {
+        return numericValue * 1000;
+      } else if (lowerQuantity.includes('g') && !lowerQuantity.includes('kg')) {
+        return numericValue / 1000;
+      } else if (lowerQuantity.includes('lb') || lowerQuantity.includes('pound')) {
+        return numericValue * 0.453592;
+      }
+      
+      return numericValue;
     }
-    
-    return numericValue;
   };
 
-  // Validate minimum quantities
+  // Validate minimum quantities with product-specific requirements
   const validateQuantities = (): string[] => {
     const errors: string[] = [];
     const selectedSpices = formData.spices.filter(spice => spice.selected);
@@ -235,9 +243,11 @@ const QuoteRequestPage: React.FC = () => {
       if (!spice.quantity.trim()) {
         errors.push(`Please specify quantity for ${spice.name}.`);
       } else {
-        const quantityInKg = extractQuantityValue(spice.quantity);
-        if (quantityInKg < 1000) {
-          errors.push(`${spice.name}: Minimum order quantity is 1000kg (Current: ${quantityInKg}kg).`);
+        const quantityValue = extractQuantityValue(spice.quantity, spice.name);
+        const { min, unit } = getProductMinimumRequirements(spice.name);
+        
+        if (quantityValue < min) {
+          errors.push(`${spice.name}: Minimum order quantity is ${min} ${unit} (Current: ${quantityValue} ${unit}).`);
         }
       }
     });
@@ -256,7 +266,7 @@ const QuoteRequestPage: React.FC = () => {
     } else {
       updatedSpices[index].quantity = value as string;
       // Auto-check if quantity > 0
-      const quantityValue = extractQuantityValue(value as string);
+      const quantityValue = extractQuantityValue(value as string, updatedSpices[index].name);
       if (quantityValue > 0) {
         updatedSpices[index].selected = true;
       } else {
@@ -326,11 +336,18 @@ const QuoteRequestPage: React.FC = () => {
       // Prepare selected products data
       const selectedProducts = formData.spices
         .filter(spice => spice.selected && spice.quantity.trim())
-        .map(spice => ({
-          name: spice.name,
-          quantity: spice.quantity,
-          quantityInKg: extractQuantityValue(spice.quantity)
-        }));
+        .map(spice => {
+          const { unit } = getProductMinimumRequirements(spice.name);
+          const quantity = extractQuantityValue(spice.quantity, spice.name);
+          
+          return {
+            name: spice.name,
+            quantity: spice.quantity,
+            quantityInKg: unit === 'cases' ? quantity : quantity, // Keep consistent for email template
+            actualUnit: unit,
+            actualQuantity: quantity
+          };
+        });
 
       const { date, time } = getCurrentDateTime();
       
@@ -363,7 +380,7 @@ const QuoteRequestPage: React.FC = () => {
           email: '',
           phone: '',
           country: '',
-          spices: initialSpices,
+          spices: initialSpices, // Already includes category information from createInitialSpices()
           otherProducts: '',
           packaging: [],
           additionalComments: ''
@@ -412,11 +429,11 @@ const QuoteRequestPage: React.FC = () => {
               Wholesale Quote Request
             </h2>
             <p className="text-xl text-black max-w-3xl mx-auto mb-6">
-              Fill out the form below with your bulk requirements. All products have a minimum order quantity of <span className="font-bold text-green-600">1000kg</span>.
+              Fill out the form below with your bulk requirements. Products have minimum order quantities: <span className="font-bold text-green-600">1000kg for spices</span>, <span className="font-bold text-blue-600">156 cases for beverages</span>, and <span className="font-bold text-purple-600">40 cases for select items</span>.
             </p>
             <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-2">
               <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-700">Minimum Order: 1000kg per product</span>
+              <span className="text-sm font-semibold text-amber-700">Different minimum quantities apply per product type</span>
             </div>
           </div>
 
@@ -548,52 +565,71 @@ const QuoteRequestPage: React.FC = () => {
                 Product Selection
               </h3>
               <p className="text-black mb-6">
-                Select products and specify quantities (minimum 1000kg per product). You can use units like: 1000kg, 1.5t, 2000 kg, etc.
-                <br />
+              Select products and specify quantities. Please note that minimum order quantities vary by product.                <br />
                 <span className="text-sm text-green-600 font-medium">Tip: Enter a quantity and the product will be automatically selected!</span>
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {formData.spices.map((spice, index) => (
-                  <div key={spice.name} className={`border rounded-2xl p-4 transition-all duration-200 hover:scale-105 hover:shadow-md ${
-                    spice.selected 
-                      ? 'bg-green-50/50 border-green-200 hover:bg-green-50' 
-                      : 'bg-slate-50/50 border-slate-200 hover:bg-green-50/50 hover:border-green-200'
-                  }`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={spice.selected}
-                          onChange={(e) => handleSpiceChange(index, 'selected', e.target.checked)}
-                          disabled={isSubmitting}
-                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200 disabled:opacity-50"
-                        />
-                        <span className="ml-2 font-semibold text-black text-sm">{spice.name}</span>
-                      </label>
-                    </div>
-                    <input 
-                      type="text" 
-                      placeholder="Min: 1000kg (e.g., 1500kg, 2t)"
-                      value={spice.quantity}
-                      onChange={(e) => handleSpiceChange(index, 'quantity', e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full px-3 py-2 text-sm text-black bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-green-300 hover:bg-green-50/30 disabled:opacity-50"
-                    />
-                    {spice.selected && spice.quantity && (
-                      <div className="mt-2 text-xs">
-                        <span className={`font-medium ${
-                          extractQuantityValue(spice.quantity) >= 1000 
-                            ? 'text-green-600' 
-                            : 'text-red-600'
-                        }`}>
-                          {extractQuantityValue(spice.quantity)}kg 
-                          {extractQuantityValue(spice.quantity) < 1000 ? ' (Below minimum)' : ' ✓'}
-                        </span>
+                {formData.spices.map((spice, index) => {
+                  const { min, unit } = getProductMinimumRequirements(spice.name);
+                  
+                  // Create more specific placeholders for beverages
+                  let placeholder;
+                  if (spice.name === 'Jivraj 9 Tea' || spice.name === 'Cow Ghee') {
+                    placeholder = `Min: ${min} cases (e.g., 60 cases, 100 cases)`;
+                  } else if (unit === 'cases') {
+                    placeholder = `Min: ${min} cases (e.g., 200 cases, 300 cases)`;
+                  } else {
+                    placeholder = `Min: ${min}kg (e.g., 1500kg, 2t, 2000kg)`;
+                  }
+                  
+                  return (
+                    <div key={spice.name} className={`border rounded-2xl p-4 transition-all duration-200 hover:scale-105 hover:shadow-md ${
+                      spice.selected 
+                        ? 'bg-green-50/50 border-green-200 hover:bg-green-50' 
+                        : 'bg-slate-50/50 border-slate-200 hover:bg-green-50/50 hover:border-green-200'
+                    }`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={spice.selected}
+                            onChange={(e) => handleSpiceChange(index, 'selected', e.target.checked)}
+                            disabled={isSubmitting}
+                            className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200 disabled:opacity-50"
+                          />
+                          <span className="ml-2 font-semibold text-black text-sm">
+                            {spice.name}
+                            {unit === 'cases' && <span className="text-blue-600 text-xs ml-1">(Cases)</span>}
+                          </span>
+                        </label>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <input 
+                        type="text" 
+                        placeholder={placeholder}
+                        value={spice.quantity}
+                        onChange={(e) => handleSpiceChange(index, 'quantity', e.target.value)}
+                        disabled={isSubmitting}
+                        className="w-full px-3 py-2 text-sm text-black bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-green-300 hover:bg-green-50/30 disabled:opacity-50"
+                      />
+                      {spice.selected && spice.quantity && (
+                        <div className="mt-2 text-xs">
+                          <span className={`font-medium ${
+                            extractQuantityValue(spice.quantity, spice.name) >= min 
+                              ? 'text-green-600' 
+                              : 'text-red-600'
+                          }`}>
+                            {extractQuantityValue(spice.quantity, spice.name)} {unit}
+                            {extractQuantityValue(spice.quantity, spice.name) < min ? 
+                              (unit === 'cases' ? ' (Below minimum cases)' : ' (Below minimum)') : 
+                              ' ✓'
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -605,14 +641,14 @@ const QuoteRequestPage: React.FC = () => {
               </h3>
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-black mb-3">Other Products (minimum 1000kg each)</label>
+                  <label className="block text-sm font-semibold text-black mb-3">Other Products</label>
                   <textarea 
                     rows={4} 
                     value={formData.otherProducts}
                     onChange={(e) => handleInputChange('otherProducts', e.target.value)}
                     disabled={isSubmitting}
                     className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
-                    placeholder="List any other spices or products with quantities (e.g., Custom Spice Blend - 2000kg, Organic Turmeric - 1500kg)..."
+                    placeholder="List any other spices or products with quantities."
                   />
                 </div>
 
