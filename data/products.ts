@@ -42,7 +42,10 @@ export const productCategories: Record<string, Product[]> = {
   'Spice Powders': [
     { name: 'Amchur Powder', image: '/amchur-powder.png' },
     { name: 'Black Pepper Powder', image: '/black-pepper-powder.png' },
+    { name: 'Black Salt', image: '/black-salt.png' },
+    { name: 'Chilli Flakes', image: '/chilli-flakes.png' },
     { name: 'Chilli Powder', image: '/chilli.4cb97887f4a5e68d5306.png' },
+    { name: 'Chilli Steam', image: '/chilli-steam-dundi.png' },
     { name: 'Cinnamon Powder', image: '/cinnamon-powder.png' },
     { name: 'Cloves Powder', image: '/cloves-powder.png' },
     { name: 'Coriander Cumin Powder', image: '/coriander-cumin-powder.png' },
@@ -52,6 +55,8 @@ export const productCategories: Record<string, Product[]> = {
     { name: 'Garlic Powder', image: '/garlic-powder.png' },
     { name: 'Ginger Powder', image: '/ginger-powder.png' },
     { name: 'Kashmiri Chilli Powder', image: '/kashmiri-chilli-powder.png' },
+    { name: 'LG Hing', image: '/lg-hing.png' },
+    { name: 'Sugar', image: '/sugar.png' },
     { name: 'Turmeric Powder', image: '/turmeric.1ba634171390982c0658.png' },
   ],
 
@@ -74,7 +79,6 @@ export const productCategories: Record<string, Product[]> = {
     { name: 'Rice', image: '/rice.png' },
     { name: 'Poha', image: '/poha.png' },
     { name: 'Sabudana', image: '/sabudana.png' },
-    { name: 'Sooji Coarse', image: '/sooji-coarse.png' },
   ],
 
   'Nuts & Seeds': [
@@ -91,15 +95,6 @@ export const productCategories: Record<string, Product[]> = {
     { name: 'Psyllium Husk', image: '/psyllium-husk.png' },
   ],
 
-  'Specialty Items & Condiments': [
-    { name: 'Black Salt', image: '/black-salt.png' },
-    { name: 'Chilli Flakes', image: '/chilli-flakes.png' },
-    { name: 'Chilli Steam Dundi Cut', image: '/chilli-steam-dundi.png' },
-    { name: 'LG Hing', image: '/lg-hing.png' },
-    { name: 'Sugar', image: '/sugar.png' },
-    { name: 'Swad Ras', image: '/swad-ras.png' },
-  ],
-
   'Beverages': [
     { name: 'Fanta', image: '/fanta.png' },
     { name: 'Jivraj 9 Tea', image: '/jivraj-tea.png' },
@@ -107,7 +102,6 @@ export const productCategories: Record<string, Product[]> = {
     { name: 'Limca', image: '/limca.png' },
     { name: 'Sosyo', image: '/sosyo.png' },
     { name: 'Thumbs Up', image: '/thumbs-up.png' },
-    { name: 'Wagh Bakri Tea', image: '/wagh-bakri-tea.png' },
   ],
 };
 
