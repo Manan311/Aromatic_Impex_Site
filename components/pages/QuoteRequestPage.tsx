@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   CubeIcon,
   CheckIcon,
@@ -9,11 +10,14 @@ import {
   PlusIcon,
   PaperAirplaneIcon,
   ArrowLeftIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  XMarkIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { createInitialSpices, type SpiceProduct } from '@/data/products';
+import { sendQuoteRequestEmail, getCurrentDateTime, initEmailJS, type QuoteRequestEmailData } from '@/lib/emailjs';
 
 interface FormData {
   firstName: string;
@@ -38,7 +42,17 @@ interface ValidationErrors {
 const QuoteRequestPage: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
-  const [realtimeErrors, setRealtimeErrors] = useState<ValidationErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  
+  // Individual field error states for real-time validation
+  const [phoneError, setPhoneError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [countryError, setCountryError] = useState('');
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
 
   // Use centralized product data
   const initialSpices = createInitialSpices();
@@ -56,6 +70,25 @@ const QuoteRequestPage: React.FC = () => {
     additionalComments: ''
   });
 
+  useEffect(() => {
+    initEmailJS();
+  }, []);
+
+  // Countdown effect for success modal
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (showSuccess && countdown > 0) {
+      interval = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    } else if (countdown === 0) {
+      handleCloseModal();
+    }
+
+    return () => clearInterval(interval);
+  }, [showSuccess, countdown]);
+
   const packagingOptions = [
     'PP Bags', 
     'Custom Packaging',
@@ -68,11 +101,104 @@ const QuoteRequestPage: React.FC = () => {
     'United States'
   ];
 
-  // Email validation regex
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // Enhanced phone number validation (same as ContactPage)
+  const validatePhoneNumber = (phone: string): string => {
+    if (!phone.trim()) return ''; // Phone is optional
+    
+    // Remove all non-digit characters except + at the beginning
+    const cleanPhone = phone.replace(/[^\d+]/g, '');
+    
+    // Check for valid patterns
+    const phonePatterns = [
+      /^\+1[2-9]\d{2}[2-9]\d{2}\d{4}$/, // +1XXXXXXXXXX (US/Canada)
+      /^[2-9]\d{2}[2-9]\d{2}\d{4}$/, // XXXXXXXXXX (US/Canada without +1)
+      /^\+\d{10,15}$/, // International format +XXXXXXXXXXX
+      /^\d{10}$/, // 10 digit US/Canada
+    ];
+    
+    const isValid = phonePatterns.some(pattern => pattern.test(cleanPhone));
+    
+    if (!isValid) {
+      return 'Please enter a valid phone number (e.g., +1234567890, 123-456-7890, or (123) 456-7890)';
+    }
+    
+    return '';
+  };
 
-  // Phone validation regex (supports various international formats)
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+  // Enhanced email validation
+  const validateEmail = (email: string): string => {
+    if (!email.trim()) return '';
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address (e.g., user@example.com)';
+    }
+    return '';
+  };
+
+  // Enhanced country validation
+  const validateCountry = (country: string): string => {
+    if (!country.trim()) return '';
+    
+    const isValid = validCountries.some(validCountry => 
+      validCountry.toLowerCase() === country.toLowerCase()
+    );
+    if (!isValid) {
+      return 'Please enter a valid country name (Canada or United States)';
+    }
+    return '';
+  };
+
+  // Handle phone number change with real-time validation
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, phone: value });
+    
+    // Clear error when user starts typing
+    if (phoneError) {
+      setPhoneError('');
+    }
+    
+    // Validate on blur or if there's content
+    if (value.trim()) {
+      const error = validatePhoneNumber(value);
+      setPhoneError(error);
+    }
+  };
+
+  // Handle email change with real-time validation
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, email: value });
+    
+    // Clear error when user starts typing
+    if (emailError) {
+      setEmailError('');
+    }
+    
+    // Validate on blur or if there's content
+    if (value.trim()) {
+      const error = validateEmail(value);
+      setEmailError(error);
+    }
+  };
+
+  // Handle country change with real-time validation
+  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, country: value });
+    
+    // Clear error when user starts typing
+    if (countryError) {
+      setCountryError('');
+    }
+    
+    // Validate on blur or if there's content
+    if (value.trim()) {
+      const error = validateCountry(value);
+      setCountryError(error);
+    }
+  };
 
   // Function to extract numeric value from quantity string
   const extractQuantityValue = (quantityStr: string): number => {
@@ -94,37 +220,6 @@ const QuoteRequestPage: React.FC = () => {
     }
     
     return numericValue;
-  };
-
-  // Validate email format
-  const validateEmail = (email: string): string | null => {
-    if (!email) return null;
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address (e.g., user@example.com)';
-    }
-    return null;
-  };
-
-  // Validate phone format
-  const validatePhone = (phone: string): string | null => {
-    if (!phone) return null;
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-    if (!phoneRegex.test(cleanPhone)) {
-      return 'Please enter a valid phone number (e.g., +1234567890 or 1234567890)';
-    }
-    return null;
-  };
-
-  // Validate country
-  const validateCountry = (country: string): string | null => {
-    if (!country) return null;
-    const isValid = validCountries.some(validCountry => 
-      validCountry.toLowerCase() === country.toLowerCase()
-    );
-    if (!isValid) {
-      return 'Please enter a valid country name';
-    }
-    return null;
   };
 
   // Validate minimum quantities
@@ -189,66 +284,116 @@ const QuoteRequestPage: React.FC = () => {
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData({ ...formData, [field]: value });
-    
-    // Clear specific validation errors when user types
-    if (field === 'email' && validationErrors.email) {
-      setValidationErrors({ ...validationErrors, email: undefined });
-    }
-    if (field === 'phone' && validationErrors.phone) {
-      setValidationErrors({ ...validationErrors, phone: undefined });
-    }
-    if (field === 'country' && validationErrors.country) {
-      setValidationErrors({ ...validationErrors, country: undefined });
-    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCloseModal = () => {
+    setShowSuccess(false);
+    setCountdown(30);
+    router.push('/');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const errors: ValidationErrors = {};
-    
-    // Validate email
-    const emailError = validateEmail(formData.email);
-    if (emailError) errors.email = emailError;
-    
-    // Validate phone
-    const phoneError = validatePhone(formData.phone);
-    if (phoneError) errors.phone = phoneError;
-    
-    // Validate country
-    const countryError = validateCountry(formData.country);
-    if (countryError) errors.country = countryError;
-    
-    // Validate quantities
+    // Validate all fields on submit
+    const emailValidationError = validateEmail(formData.email);
+    const phoneValidationError = validatePhoneNumber(formData.phone);
+    const countryValidationError = validateCountry(formData.country);
     const quantityErrors = validateQuantities();
-    if (quantityErrors.length > 0) errors.quantities = quantityErrors;
-    
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
+
+    // Set individual field errors
+    setEmailError(emailValidationError);
+    setPhoneError(phoneValidationError);
+    setCountryError(countryValidationError);
+
+    // Check for any errors
+    if (emailValidationError || phoneValidationError || countryValidationError || quantityErrors.length > 0) {
+      setShowValidationErrors(true);
+      setValidationErrors({
+        email: emailValidationError || undefined,
+        phone: phoneValidationError || undefined,
+        country: countryValidationError || undefined,
+        quantities: quantityErrors.length > 0 ? quantityErrors : undefined
+      });
       window.scrollTo(0, 0);
       return;
     }
-    
-    setShowSuccess(true);
-    console.log('Form submitted:', formData);
+
+    setIsSubmitting(true);
+    setShowValidationErrors(false);
+
+    try {
+      // Prepare selected products data
+      const selectedProducts = formData.spices
+        .filter(spice => spice.selected && spice.quantity.trim())
+        .map(spice => ({
+          name: spice.name,
+          quantity: spice.quantity,
+          quantityInKg: extractQuantityValue(spice.quantity)
+        }));
+
+      const { date, time } = getCurrentDateTime();
+      
+      const quoteRequestData: QuoteRequestEmailData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        companyName: formData.companyName,
+        email: formData.email,
+        phone: formData.phone.trim() || undefined,
+        country: formData.country,
+        selectedProducts,
+        otherProducts: formData.otherProducts.trim() || undefined,
+        packaging: formData.packaging,
+        additionalComments: formData.additionalComments.trim() || undefined,
+        submissionDate: date,
+        submissionTime: time
+      };
+
+      // Send email using EmailJS
+      const result = await sendQuoteRequestEmail(quoteRequestData);
+
+      if (result.success) {
+        console.log('Quote request email sent successfully');
+        
+        // Reset form and state
+        setFormData({
+          firstName: '',
+          lastName: '',
+          companyName: '',
+          email: '',
+          phone: '',
+          country: '',
+          spices: initialSpices,
+          otherProducts: '',
+          packaging: [],
+          additionalComments: ''
+        });
+        setValidationErrors({});
+        setPhoneError('');
+        setEmailError('');
+        setCountryError('');
+        setShowValidationErrors(false);
+        
+        // Show thank you modal
+        setShowSuccess(true);
+        setCountdown(30);
+        
+      } else {
+        throw new Error(result.error || 'Failed to send quote request');
+      }
+      
+    } catch (error) {
+      console.error('Failed to send quote request:', error);
+      alert('Failed to send quote request. Please try again or contact us directly at info@aromaticimpex.com');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const closeSuccessMessage = () => {
     setShowSuccess(false);
-    setFormData({
-      firstName: '',
-      lastName: '',
-      companyName: '',
-      email: '',
-      phone: '',
-      country: '',
-      spices: initialSpices,
-      otherProducts: '',
-      packaging: [],
-      additionalComments: ''
-    });
-    setValidationErrors({});
-    setRealtimeErrors({});
+    setCountdown(30);
+    router.push('/');
   };
 
   return (
@@ -275,17 +420,17 @@ const QuoteRequestPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Validation Errors */}
-          {(validationErrors.email || validationErrors.phone || validationErrors.country || validationErrors.quantities) && (
+          {/* Validation Errors Banner */}
+          {showValidationErrors && (emailError || phoneError || countryError || validationErrors.quantities) && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
               <div className="flex items-center mb-4">
                 <ExclamationTriangleIcon className="w-6 h-6 text-red-600 mr-3" />
                 <h3 className="text-lg font-semibold text-red-800">Please fix the following issues:</h3>
               </div>
               <ul className="list-disc list-inside space-y-2">
-                {validationErrors.email && <li className="text-red-700">{validationErrors.email}</li>}
-                {validationErrors.phone && <li className="text-red-700">{validationErrors.phone}</li>}
-                {validationErrors.country && <li className="text-red-700">{validationErrors.country}</li>}
+                {emailError && <li className="text-red-700">{emailError}</li>}
+                {phoneError && <li className="text-red-700">{phoneError}</li>}
+                {countryError && <li className="text-red-700">{countryError}</li>}
                 {validationErrors.quantities?.map((error, index) => (
                   <li key={index} className="text-red-700">{error}</li>
                 ))}
@@ -293,7 +438,7 @@ const QuoteRequestPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-10 shadow-2xl">
+          <form ref={formRef} onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-10 shadow-2xl">
             {/* Contact Information */}
             <div className="mb-12">
               <h3 className="text-2xl font-bold text-black mb-6 flex items-center">
@@ -308,7 +453,8 @@ const QuoteRequestPage: React.FC = () => {
                     required 
                     value={formData.firstName}
                     onChange={(e) => handleInputChange('firstName', e.target.value)}
-                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
                     placeholder="Enter your first name"
                   />
                 </div>
@@ -319,7 +465,8 @@ const QuoteRequestPage: React.FC = () => {
                     required 
                     value={formData.lastName}
                     onChange={(e) => handleInputChange('lastName', e.target.value)}
-                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
                     placeholder="Enter your last name"
                   />
                 </div>
@@ -330,7 +477,8 @@ const QuoteRequestPage: React.FC = () => {
                     required 
                     value={formData.companyName}
                     onChange={(e) => handleInputChange('companyName', e.target.value)}
-                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white" 
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
                     placeholder="Enter your company name"
                   />
                 </div>
@@ -340,14 +488,15 @@ const QuoteRequestPage: React.FC = () => {
                     type="email" 
                     required 
                     value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
-                      validationErrors.email ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    onChange={handleEmailChange}
+                    disabled={isSubmitting}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                      emailError ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
                     }`}
                     placeholder="Enter your email address (e.g., user@example.com)"
                   />
-                  {validationErrors.email && (
-                    <p className="text-red-600 text-sm mt-1">{validationErrors.email}</p>
+                  {emailError && (
+                    <p className="text-red-600 text-xs mt-2">{emailError}</p>
                   )}
                 </div>
                 <div>
@@ -355,14 +504,15 @@ const QuoteRequestPage: React.FC = () => {
                   <input 
                     type="tel" 
                     value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
-                      validationErrors.phone ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    onChange={handlePhoneChange}
+                    disabled={isSubmitting}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                      phoneError ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
                     }`}
-                    placeholder="Enter your phone number (e.g., +1234567890)"
+                    placeholder="Enter your phone number (e.g., +1 234-567-8900)"
                   />
-                  {validationErrors.phone && (
-                    <p className="text-red-600 text-sm mt-1">{validationErrors.phone}</p>
+                  {phoneError && (
+                    <p className="text-red-600 text-xs mt-2">{phoneError}</p>
                   )}
                 </div>
                 <div>
@@ -371,9 +521,10 @@ const QuoteRequestPage: React.FC = () => {
                     type="text" 
                     required 
                     value={formData.country}
-                    onChange={(e) => handleInputChange('country', e.target.value)}
-                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white ${
-                      validationErrors.country ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
+                    onChange={handleCountryChange}
+                    disabled={isSubmitting}
+                    className={`w-full px-4 py-4 text-black bg-slate-50/50 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                      countryError ? 'border-red-300 bg-red-50/50' : 'border-slate-200'
                     }`}
                     placeholder="Enter your country (e.g., Canada, United States)"
                     list="countries"
@@ -383,8 +534,8 @@ const QuoteRequestPage: React.FC = () => {
                       <option key={country} value={country} />
                     ))}
                   </datalist>
-                  {validationErrors.country && (
-                    <p className="text-red-600 text-sm mt-1">{validationErrors.country}</p>
+                  {countryError && (
+                    <p className="text-red-600 text-xs mt-2">{countryError}</p>
                   )}
                 </div>
               </div>
@@ -415,7 +566,8 @@ const QuoteRequestPage: React.FC = () => {
                           type="checkbox" 
                           checked={spice.selected}
                           onChange={(e) => handleSpiceChange(index, 'selected', e.target.checked)}
-                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200"
+                          disabled={isSubmitting}
+                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200 disabled:opacity-50"
                         />
                         <span className="ml-2 font-semibold text-black text-sm">{spice.name}</span>
                       </label>
@@ -425,7 +577,8 @@ const QuoteRequestPage: React.FC = () => {
                       placeholder="Min: 1000kg (e.g., 1500kg, 2t)"
                       value={spice.quantity}
                       onChange={(e) => handleSpiceChange(index, 'quantity', e.target.value)}
-                      className="w-full px-3 py-2 text-sm text-black bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-green-300 hover:bg-green-50/30"
+                      disabled={isSubmitting}
+                      className="w-full px-3 py-2 text-sm text-black bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 hover:border-green-300 hover:bg-green-50/30 disabled:opacity-50"
                     />
                     {spice.selected && spice.quantity && (
                       <div className="mt-2 text-xs">
@@ -457,7 +610,8 @@ const QuoteRequestPage: React.FC = () => {
                     rows={4} 
                     value={formData.otherProducts}
                     onChange={(e) => handleInputChange('otherProducts', e.target.value)}
-                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white" 
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
                     placeholder="List any other spices or products with quantities (e.g., Custom Spice Blend - 2000kg, Organic Turmeric - 1500kg)..."
                   />
                 </div>
@@ -471,7 +625,8 @@ const QuoteRequestPage: React.FC = () => {
                           type="checkbox" 
                           checked={formData.packaging.includes(option)}
                           onChange={(e) => handlePackagingChange(option, e.target.checked)}
-                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200"
+                          disabled={isSubmitting}
+                          className="w-4 h-4 accent-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2 hover:border-green-400 transition-colors duration-200 disabled:opacity-50"
                         />
                         <span className="ml-2 text-black">{option}</span>
                       </label>
@@ -485,7 +640,8 @@ const QuoteRequestPage: React.FC = () => {
                     rows={6} 
                     value={formData.additionalComments}
                     onChange={(e) => handleInputChange('additionalComments', e.target.value)}
-                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white" 
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-4 text-black bg-slate-50/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none hover:border-slate-300 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" 
                     placeholder="Please provide any additional details about your requirements, certifications needed, delivery address, quality specifications, or any special requests..."
                   />
                 </div>
@@ -496,10 +652,20 @@ const QuoteRequestPage: React.FC = () => {
             <div className="text-center">
               <button 
                 type="submit" 
-                className="group bg-gradient-to-r from-green-600 to-emerald-600 text-white px-12 py-5 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300 text-lg shadow-xl hover:shadow-2xl hover:scale-105 flex items-center space-x-2 mx-auto"
+                disabled={isSubmitting || emailError || phoneError || countryError ? true : false}
+                className="group bg-gradient-to-r from-green-600 to-emerald-600 text-white px-12 py-5 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300 text-lg shadow-xl hover:shadow-2xl hover:scale-105 flex items-center space-x-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                <span>Submit Quote Request</span>
-                <PaperAirplaneIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit Quote Request</span>
+                    <PaperAirplaneIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
               </button>
               <p className="text-black text-sm mt-4">We'll get back to you within 24 hours with a detailed wholesale quote.</p>
             </div>
@@ -507,21 +673,52 @@ const QuoteRequestPage: React.FC = () => {
         </div>
       </main>
 
-      {/* Success Message Modal */}
+      {/* Success Message Modal - Same as ContactPage */}
       {showSuccess && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-12 max-w-md mx-4 text-center shadow-2xl">
-            <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckIcon className="w-10 h-10 text-white" />
-            </div>
-            <h3 className="text-2xl font-bold text-black mb-4">Wholesale Quote Request Submitted!</h3>
-            <p className="text-black mb-6">Thank you for your bulk order inquiry. We'll review your requirements and get back to you within 24 hours with a detailed wholesale quote.</p>
-            <button 
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl relative animate-in fade-in zoom-in duration-300">
+            {/* Close Button */}
+            <button
               onClick={closeSuccessMessage}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-2xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300"
+              className="absolute top-4 right-4 w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-colors"
             >
-              Close
+              <XMarkIcon className="w-4 h-4 text-slate-600" />
             </button>
+
+            {/* Success Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircleIcon className="w-8 h-8 text-white" />
+            </div>
+
+            {/* Thank You Message */}
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">
+                Quote Request Submitted!
+              </h2>
+              <p className="text-slate-600 leading-relaxed mb-6">
+                Thank you for your wholesale quote request. Our team will review your requirements and get back to you within 24 hours with a detailed quote.
+              </p>
+
+              {/* Countdown */}
+              <div className="text-sm text-slate-500 mb-6">
+                Redirecting to homepage in {countdown} seconds...
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={closeSuccessMessage}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-6 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-300"
+                >
+                  Go to Homepage
+                </button>
+                <Link href="/products" className="flex-1">
+                  <button className="w-full border-2 border-green-600 text-green-600 py-3 px-6 rounded-xl font-semibold hover:bg-green-50 transition-all duration-300">
+                    View Products
+                  </button>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       )}
