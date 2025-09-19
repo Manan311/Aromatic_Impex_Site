@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -18,28 +17,9 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
 export default function AboutPage() {
-  const [clickCount, setClickCount] = useState(0);
-  const [showHRLink, setShowHRLink] = useState(false);
-
-  const handleLogoClick = () => {
-    setClickCount((prev) => {
-      const newCount = prev + 1;
-      if (newCount >= 5) {
-        setShowHRLink(true);
-        setTimeout(() => setShowHRLink(false), 10000);
-        return 0;
-      }
-      return newCount;
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <Header 
-        showHRLink={showHRLink}
-        onLogoClick={handleLogoClick}
-        clickCount={clickCount}
-      />
+      <Header />
 
       {/* Enhanced Page Header with Background Image */}
       <section className="relative py-20 px-6 overflow-hidden">

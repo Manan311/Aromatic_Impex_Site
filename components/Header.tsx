@@ -20,6 +20,9 @@ export default function Header({ showHRLink = false, onLogoClick, clickCount = 0
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
 
+  // Disable HR feature in production or when explicitly disabled
+  const isHRDisabled = process.env.NODE_ENV === 'production' || process.env.DISABLE_HR_FEATURE === 'true';
+
   const navigation = [
     { name: 'Home', href: '/', current: pathname === '/' },
     { name: 'About', href: '/about', current: pathname === '/about' },
@@ -137,8 +140,8 @@ export default function Header({ showHRLink = false, onLogoClick, clickCount = 0
         )}
       </div>
 
-      {/* Debug info (only visible during development) */}
-      {process.env.NODE_ENV === 'development' && clickCount > 0 && (
+      {/* Debug info (only visible when HR feature is enabled and has clicks) */}
+      {!isHRDisabled && clickCount > 0 && (
         <div className="bg-yellow-100 text-yellow-800 text-xs px-4 py-1 text-center">
           Logo clicks: {clickCount}/5 for HR link
         </div>

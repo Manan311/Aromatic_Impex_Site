@@ -23,11 +23,19 @@ export default function HomePage() {
   const [clickCount, setClickCount] = useState(0);
   const [showHRLink, setShowHRLink] = useState(false);
 
+  // Disable HR feature in production or when explicitly disabled
+  const isHRDisabled = process.env.NODE_ENV === 'production' || process.env.DISABLE_HR_FEATURE === 'true';
+
   useEffect(() => {
     initEmailJS();
   }, []);
 
   const handleLogoClick = () => {
+    // Only enable HR click feature when not disabled
+    if (isHRDisabled) {
+      return;
+    }
+
     setClickCount((prev) => {
       const newCount = prev + 1;
       if (newCount >= 5) {
@@ -42,9 +50,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <Header 
-        showHRLink={showHRLink}
+        showHRLink={!isHRDisabled && showHRLink}
         onLogoClick={handleLogoClick}
-        clickCount={clickCount}
+        clickCount={!isHRDisabled ? clickCount : 0}
       />
 
       {/* Enhanced Hero Section with Background Image */}

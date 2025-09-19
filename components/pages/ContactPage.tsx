@@ -22,8 +22,6 @@ import Footer from '@/components/Footer';
 import { sendContactEmail, getCurrentDateTime, initEmailJS, type ContactEmailData } from '@/lib/emailjs';
 
 export default function ContactPage() {
-  const [clickCount, setClickCount] = useState(0);
-  const [showHRLink, setShowHRLink] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [countdown, setCountdown] = useState(30);
@@ -114,18 +112,6 @@ export default function ContactPage() {
     }
   };
 
-  const handleLogoClick = () => {
-    setClickCount((prev) => {
-      const newCount = prev + 1;
-      if (newCount >= 5) {
-        setShowHRLink(true);
-        setTimeout(() => setShowHRLink(false), 10000);
-        return 0;
-      }
-      return newCount;
-    });
-  };
-
   const handleCloseModal = () => {
     setShowThankYou(false);
     setCountdown(30);
@@ -200,11 +186,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <Header 
-        showHRLink={showHRLink}
-        onLogoClick={handleLogoClick}
-        clickCount={clickCount}
-      />
+      <Header />
 
       {/* Thank You Modal */}
       {showThankYou && (
@@ -283,7 +265,7 @@ export default function ContactPage() {
               Let's talk with us...
             </h3>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              Reach out with inquiries — our team will respond promptly.
+              Reach out with inquiries â€" our team will respond promptly.
             </p>
           </div>
 
