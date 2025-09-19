@@ -51,7 +51,7 @@ export default function Header({ showHRLink = false, onLogoClick, clickCount = 0
               <h1 className="text-xl font-bold bg-gradient-to-r from-green-700 to-emerald-600 bg-clip-text text-transparent">
                 Aromatic Impex Inc.
               </h1>
-              <p className="text-sm text-slate-500 leading-none">Premium Spice Imports</p>
+              <p className="text-sm text-slate-500 leading-none">Premium Spice Importer</p>
             </div>
           </Link>
 

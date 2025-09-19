@@ -90,7 +90,7 @@ export default function HomePage() {
             <p className="text-xl text-slate-500 mb-12 max-w-4xl mx-auto leading-relaxed">
               Leading importer of premium-quality spices, delivering authentic
               flavors sourced from the finest growers worldwide. Specialized in
-              wholesale and bulk spice imports for businesses globally.
+              wholesale and bulk spice imports for businesses in North America.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

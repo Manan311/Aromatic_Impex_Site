@@ -40,6 +40,13 @@ export default function ProductsPage() {
     });
   };
 
+  // Get products and sort them alphabetically by name
+  const getAlphabetizedProducts = (category: string) => {
+    return getFilteredProducts(category).sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <Header 
@@ -105,7 +112,7 @@ export default function ProductsPage() {
 
           {/* Products Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-20">
-            {getFilteredProducts(selectedCategory).map((spice, index) => (
+            {getAlphabetizedProducts(selectedCategory).map((spice, index) => (
               <SpiceCard
                 key={`${selectedCategory}-${index}`}
                 name={spice.name}

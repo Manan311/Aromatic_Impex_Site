@@ -429,7 +429,7 @@ const QuoteRequestPage: React.FC = () => {
               Wholesale Quote Request
             </h2>
             <p className="text-xl text-black max-w-3xl mx-auto mb-6">
-              Fill out the form below with your bulk requirements. Products have minimum order quantities: <span className="font-bold text-green-600">1000kg for spices</span>, <span className="font-bold text-blue-600">156 cases for beverages</span>, and <span className="font-bold text-purple-600">40 cases for select items</span>.
+              Fill out the form below with your bulk requirements. Products have minimum order quantities: <span className="font-bold text-green-600">1000kg for spices</span>
             </p>
             <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-2">
               <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />
